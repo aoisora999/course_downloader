@@ -1,7 +1,7 @@
 import os
 import re
 import asyncio
-import py7zr
+import patoolib
 import shutil
 import speedtest
 from pyrogram import Client, filters
@@ -36,12 +36,7 @@ def get_speedtest_results():
 
 def unzip_file(archive_path, output_folder):
     """Unarchive a file."""
-    if archive_path.endswith('.zip'):
-        with zipfile.ZipFile(archive_path, 'r') as zip_ref:
-            zip_ref.extractall(output_folder)
-    elif archive_path.endswith('.7z'):
-        with py7zr.SevenZipFile(archive_path, mode='r') as z:
-            z.extractall(path=output_folder)
+    patoolib.extract_archive(archive_path, outdir=output_folder)
     os.remove(archive_path)
 
 
