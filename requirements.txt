@@ -2,4 +2,4 @@ pyrogram
 tgcrypto
 moviepy
 speedtest-cli
-patoolib
+patool
