@@ -108,6 +108,7 @@ async def send_videos_from_folder(folder_path, chat_id, message):
     done_message = await app.send_message(chat_id, "Done uploading all videos.")
     await asyncio.sleep(0.5)
     await done_message.delete()
+    print("Done uploading all videos.")
     # Delete the folder after sending all videos
     shutil.rmtree(folder_path)
 
