@@ -1,7 +1,7 @@
 import os
 import re
 import asyncio
-import patoolib
+import zipfile
 import shutil
 import speedtest
 from pyrogram import Client, filters
@@ -34,10 +34,11 @@ def get_speedtest_results():
     )
 
 
-def unzip_file(archive_path, output_folder):
-    """Unarchive a file."""
-    patoolib.extract_archive(archive_path, outdir=output_folder)
-    os.remove(archive_path)
+def unzip_file(zip_path, output_folder):
+    """Unzip a zip file."""
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(output_folder)
+    os.remove(zip_path)  # Delete the original .zip file after unzipping
 
 
 async def get_video_thumbnail(video_path, output_path, duration):
