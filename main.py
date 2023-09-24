@@ -118,10 +118,11 @@ async def send_progress(current, total, message, last_update_time, progress_mess
 
 @app.on_message(filters.document)
 async def download_file(client, message):
-    message.delete()
     file_name = message.document.file_name
+    chat_id = message.chat.id
+    await message.delete()
     base_filename = os.path.splitext(file_name)[0]
-    await client.send_message(message.chat.id, f".\n\n<b>{base_filename}</b>\n\n.")
+    await client.send_message(chat_id, f".\n\n<b>{base_filename}</b>\n\n.")
     download_path = os.path.join(DOWNLOAD_FOLDER, file_name)
 
     progress_message = await message.reply_text("Download progress: 0%")
