@@ -1,7 +1,7 @@
 import os
 import re
 import asyncio
-import zipfile
+import patoolib
 import shutil
 import speedtest
 from pyrogram import Client, filters
@@ -34,11 +34,10 @@ def get_speedtest_results():
     )
 
 
-def unzip_file(zip_path, output_folder):
-    """Unzip a zip file."""
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(output_folder)
-    os.remove(zip_path)  # Delete the original .zip file after unzipping
+def unzip_file(archive_path, output_folder):
+    """Unarchive a file."""
+    patoolib.extract_archive(archive_path, outdir=output_folder)
+    os.remove(archive_path)
 
 
 async def get_video_thumbnail(video_path, output_path, duration):
@@ -66,20 +65,12 @@ async def send_videos_from_folder(folder_path, chat_id, message):
             if any(file.endswith(ext) for ext in VIDEO_EXTENSIONS):
                 video_files.append((file, os.path.join(root, file)))
 
-    # Extract and sort the video files based on the numeric prefix
+    # Extract and sort the video files based on the numeric prefix (this part remains as it can help in sorting)
     def extract_prefix(filename):
         match = re.match(r"(\d+)", filename)
         return int(match.group(1)) if match else 99999
 
     sorted_video_files = sorted(video_files, key=lambda x: extract_prefix(x[0]))
-
-    # Rename files to adjust the bullet number, while keeping the rest of the name unchanged
-    for idx, (file, video_path) in enumerate(sorted_video_files, 1):
-        bullet_number, rest_of_name = re.match(r"(\d+)\. (.+)", file).groups()
-        new_name = f"{idx}. {rest_of_name}"
-        new_path = os.path.join(root, new_name)
-        os.rename(video_path, new_path)
-        sorted_video_files[idx-1] = (new_name, new_path)
 
     for file, video_path in sorted_video_files:
         # Extract video metadata
