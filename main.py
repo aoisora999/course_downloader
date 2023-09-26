@@ -8,6 +8,7 @@ from pyrogram import Client, filters
 from moviepy.editor import VideoFileClip
 from config import *
 
+
 app = Client(
     "file_downloader_bot",
     api_id=api_id,
@@ -20,6 +21,9 @@ if not os.path.exists(DOWNLOAD_FOLDER):
     os.mkdir(DOWNLOAD_FOLDER)
 
 VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.flv']
+all_links = []
+user_actions = {}
+doc_list = []
 
 
 def get_speedtest_results():
@@ -57,59 +61,76 @@ async def send_progress_upload(current, total, message, last_update_time, progre
 
 
 async def send_videos_from_folder(folder_path, chat_id, message):
-    """Send video files from a folder to a specified chat."""
-    video_files = []
+    """Send files from a folder to a specified chat."""
+    global all_links
+    all_files = []
 
     for root, _, files in os.walk(folder_path):
         for file in files:
-            if any(file.endswith(ext) for ext in VIDEO_EXTENSIONS):
-                video_files.append((file, os.path.join(root, file)))
+            all_files.append((file, os.path.join(root, file)))
 
-    # Extract and sort the video files based on the numeric prefix (this part remains as it can help in sorting)
     def extract_prefix(filename):
         match = re.match(r"(\d+)", filename)
         return int(match.group(1)) if match else 99999
 
-    sorted_video_files = sorted(video_files, key=lambda x: extract_prefix(x[0]))
+    sorted_files = sorted(all_files, key=lambda x: extract_prefix(x[0]))
 
-    for file, video_path in sorted_video_files:
-        # Extract video metadata
-        with VideoFileClip(video_path) as clip:
-            duration = int(clip.duration)
-            width, height = clip.size
+    for file, file_path in sorted_files:
+        sent_message = None
+        if file.endswith('.srt'):
+            continue
 
-        thumbnail_path = os.path.splitext(video_path)[0] + "_thumbnail.jpg"
-        await get_video_thumbnail(video_path, thumbnail_path, duration)
+        if any(file.endswith(ext) for ext in VIDEO_EXTENSIONS):  # If it's a video
+            with VideoFileClip(file_path) as clip:
+                duration = int(clip.duration)
+                width, height = clip.size
 
-        # Extract the video name without its extension for the caption
-        caption = os.path.splitext(file)[0]
-        logo = f"<b>{caption}\n\n<a href='tg://user?id=6190014678'>Yami Code Academy</a></b>"
+            thumbnail_path = os.path.splitext(file_path)[0] + "_thumbnail.jpg"
+            await get_video_thumbnail(file_path, thumbnail_path, duration)
 
-        upload_progress_message = await app.send_message(chat_id, "Upload progress: 0%")
-        last_update_time = [asyncio.get_running_loop().time()]  # Use a list to make it mutable
+            caption = os.path.splitext(file)[0]
+            logo = f"<b>{caption}\n\n<a href='tg://user?id=6190014678'>Yami Code Academy</a></b>"
 
-        await app.send_video(
-            chat_id=chat_id,
-            video=video_path,
-            duration=duration,
-            width=width,
-            height=height,
-            thumb=thumbnail_path,
-            caption=logo,
-            supports_streaming=True,
-            disable_notification=True,
-            progress=send_progress_upload,
-            progress_args=(message, last_update_time, upload_progress_message)
-        )
-        await upload_progress_message.delete()
-        # Optional: Delete the thumbnail after sending
-        os.remove(thumbnail_path)
-        
-    done_message = await app.send_message(chat_id, "Done uploading all videos.")
-    await asyncio.sleep(0.5)
-    await done_message.delete()
-    print("Done uploading all videos.")
-    # Delete the folder after sending all videos
+            upload_progress_message = await app.send_message(chat_id, "Upload progress: 0%")
+            last_update_time = [asyncio.get_running_loop().time()]
+
+            sent_message = await app.send_video(
+                chat_id=chat_id,
+                video=file_path,
+                duration=duration,
+                width=width,
+                height=height,
+                thumb=thumbnail_path,
+                caption=logo,
+                supports_streaming=True,
+                disable_notification=True,
+                progress=send_progress_upload,
+                progress_args=(message, last_update_time, upload_progress_message)
+            )
+            await upload_progress_message.delete()
+            os.remove(thumbnail_path)
+        else:  # If it's a non-video file
+            caption = os.path.splitext(file)[0]
+            sent_message = await app.send_document(
+                chat_id=chat_id,
+                document=file_path,
+                disable_notification=True
+            )
+
+        # After sending, get the message link and send to the user
+        if sent_message:
+            file_link = f"https://t.me/c/{str(chat_id)[4:]}/{sent_message.id}"
+            hyper_text = f"<b><a href={file_link}>{caption}</a></b>"
+            all_links.append(hyper_text)
+
+        await asyncio.sleep(1)
+
+    all_links_text = "\n".join(all_links)
+    await app.send_message(chat_id, all_links_text)
+    all_links = []
+    noti_text = await app.send_message(chat_id, "Done Uploading for this zip")
+    await asyncio.sleep(2)
+    await noti_text.delete()
     shutil.rmtree(folder_path)
 
 
@@ -120,35 +141,76 @@ async def send_progress(current, total, message, last_update_time, progress_mess
         last_update_time[0] = asyncio.get_running_loop().time()
 
 
-@app.on_message(filters.document)
-async def download_file(client, message):
-    file_name = message.document.file_name
-    chat_id = message.chat.id
+@app.on_message(filters.command("start"))
+async def get_doc(client, message):
+    user_actions[message.chat.id] = {}
+    user_actions[message.chat.id]["user_adding"] = True
     await message.delete()
-    base_filename = os.path.splitext(file_name)[0]
-    await client.send_message(chat_id, f".\n\n<b>{base_filename}</b>\n\n.")
-    download_path = os.path.join(DOWNLOAD_FOLDER, file_name)
+    noti_text = await message.reply_text("Start sending doc...")
+    await asyncio.sleep(1)
+    await noti_text.delete()
 
-    progress_message = await message.reply_text("Download progress: 0%")
-    last_update_time = [asyncio.get_running_loop().time()]  # Use a list to make it mutable
 
-    await message.download(
-        file_name=download_path,
-        progress=send_progress,
-        progress_args=(message, last_update_time, progress_message)
-    )
-    await progress_message.delete()
+@app.on_message(filters.document)
+async def save_doc(client, message):
+    chat_id = message.chat.id
+    file_name = message.document.file_name
+    temp_dict = {
+        "file_name": file_name,
+        "chat_id": chat_id,
+        "message": message
+    }
+    doc_list.append(temp_dict)
+    await message.delete()
+    noti_text = await message.reply_text("saved doc")
+    await asyncio.sleep(1)
+    await noti_text.delete()
 
-    # Check if the downloaded file is a zip file and unzip it if it is
-    if file_name.endswith('.zip'):
-        unzip_file(download_path, DOWNLOAD_FOLDER)
-        status_t = await message.reply_text("The ZIP file has been unzipped!")
-        await asyncio.sleep(0.5)
-        await status_t.delete()
-        # Send videos from the unzipped folder
-        await send_videos_from_folder(DOWNLOAD_FOLDER, message.chat.id, message)
-    else:
-        await progress_message.edit_text(f"File has been downloaded and saved as {download_path}!")
+
+@app.on_message(filters.command("stop"))
+async def stop_doc(client, message):
+    global doc_list
+    if message.chat.id not in user_actions:
+        return
+    user_actions.pop(message.chat.id)
+    await message.delete()
+    noti_text = await message.reply_text("stopped")
+    await asyncio.sleep(1)
+    await noti_text.delete()
+    if doc_list:
+        for doc in doc_list:
+            file_name = doc["file_name"]
+            chat_id = doc["chat_id"]
+            message = doc["message"]
+            base_filename = os.path.splitext(file_name)[0]
+            sent_message = await client.send_message(message.chat.id, f".\n\n<b>{base_filename}</b>\n\n.")
+            base_file_link = f"https://t.me/c/{str(chat_id)[4:]}/{sent_message.id}"
+            hyper_text = f"<b><a href={base_file_link}>{base_filename}</a></b>\n"
+            all_links.append(hyper_text)
+            download_path = os.path.join(DOWNLOAD_FOLDER, file_name)
+
+            progress_message = await message.reply_text("Download progress: 0%")
+            last_update_time = [asyncio.get_running_loop().time()]  # Use a list to make it mutable
+
+            await message.download(
+                file_name=download_path,
+                progress=send_progress,
+                progress_args=(message, last_update_time, progress_message)
+            )
+            await progress_message.delete()
+
+            # Check if the downloaded file is a zip file and unzip it if it is
+            if file_name.endswith('.zip') or file_name.endswith('.rar'):
+                unzip_file(download_path, DOWNLOAD_FOLDER)
+                status_t = await message.reply_text("The ZIP file has been unzipped!")
+                await asyncio.sleep(0.5)
+                await status_t.delete()
+                # Send videos from the unzipped folder
+                await send_videos_from_folder(DOWNLOAD_FOLDER, chat_id, message)
+            else:
+                await progress_message.edit_text(f"File has been downloaded and saved as {download_path}!")
+
+    doc_list = []
 
 
 @app.on_message(filters.command("speedtest"))
