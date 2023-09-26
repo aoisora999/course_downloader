@@ -123,7 +123,7 @@ async def send_videos_from_folder(folder_path, chat_id, message):
             hyper_text = f"<b><a href={file_link}>{caption}</a></b>"
             all_links.append(hyper_text)
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(6)
 
     all_links_text = "\n".join(all_links)
     await app.send_message(chat_id, all_links_text)
