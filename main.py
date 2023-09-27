@@ -41,7 +41,6 @@ def get_speedtest_results():
 def unzip_file(archive_path, output_folder):
     """Unarchive a file."""
     patoolib.extract_archive(archive_path, outdir=output_folder)
-    os.remove(archive_path)
 
 
 async def get_video_thumbnail(video_path, output_path, duration):
